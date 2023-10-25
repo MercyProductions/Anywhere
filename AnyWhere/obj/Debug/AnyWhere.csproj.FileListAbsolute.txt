@@ -1,0 +1,7 @@
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\Debug\AnyWhere.exe.config
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\Debug\AnyWhere.exe
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\Debug\AnyWhere.pdb
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\Debug\AnyWhere.csproj.AssemblyReference.cache
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\Debug\AnyWhere.csproj.CoreCompileInputs.cache
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\Debug\AnyWhere.exe
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\Debug\AnyWhere.pdb

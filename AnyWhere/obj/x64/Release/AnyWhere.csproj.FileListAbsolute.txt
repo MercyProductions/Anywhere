@@ -1,0 +1,7 @@
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\x64\Release\AnyWhere.exe.config
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\x64\Release\AnyWhere.exe
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\bin\x64\Release\AnyWhere.pdb
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\x64\Release\AnyWhere.csproj.CoreCompileInputs.cache
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\x64\Release\AnyWhere.exe
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\x64\Release\AnyWhere.pdb
+C:\Users\Mercy\Desktop\AnyWhere\AnyWhere\obj\x64\Release\AnyWhere.csproj.AssemblyReference.cache
