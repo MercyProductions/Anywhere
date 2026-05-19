@@ -1,373 +1,217 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Management;
+using System.Threading;
+using System.Windows.Forms;
+using AnyWhere.Telemetry;
 
-class Program
+namespace AnyWhere
 {
-    static List<string> initialProcesses = new List<string>();
-    static List<string> AppArgs = new List<string>();
-
-    public static string filePath;
-    static void Main()
+    internal static class Program
     {
-        //StartBootstrapper();
-        //StartBootstrapperCrashHandler();
-        //StartCod();
-        //StartCodCrashHandler();
+        private static readonly ManualResetEventSlim Shutdown = new ManualResetEventSlim(false);
 
-        // Get the application's current directory
-        string currentDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        filePath = Path.Combine(currentDirectory, "output.txt");
-
-        try
+        [STAThread]
+        private static void Main(string[] args)
         {
-            // Create or open the file for writing
-            using (StreamWriter writer = File.CreateText(filePath))
+            if (args != null && args.Any(a => string.Equals(a, "--platform-self-test", StringComparison.OrdinalIgnoreCase)))
             {
-                writer.WriteLine("Application started.");
+                RunPlatformSelfTest(args);
+                return;
             }
 
-            // Get the initial list of running processes
-            GetInitialProcesses();
+            MonitorOptions options = MonitorOptions.FromArgs(args);
+            string logRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Aegis Logs");
+            Directory.CreateDirectory(logRoot);
 
-            // Create a folder for new apps if it doesn't exist
-            string newAppsDirectory = Path.Combine(currentDirectory, "New Apps");
-            Directory.CreateDirectory(newAppsDirectory);
-
-            // Start an infinite loop
-            while (true)
+            using (EventLogger logger = new EventLogger(logRoot, options.VerboseConsole))
             {
-                List<string> currentProcesses = GetCurrentProcesses();
-                List<string> closedProcesses = initialProcesses.Except(currentProcesses).ToList();
+                Console.Title = "Aegis Anywhere Detection Monitor";
+                PrintBanner(logger);
 
-                foreach (string processName in closedProcesses)
+                SecurityUtilities.TryEnableDebugPrivilege(logger);
+
+                EvidenceDatabaseMonitor evidenceDatabaseMonitor = new EvidenceDatabaseMonitor(logger, options);
+                List<IDetectionMonitor> monitors = new List<IDetectionMonitor>
                 {
-                    Console.ForegroundColor = ConsoleColor.Blue;
-                    Console.WriteLine($"Program Closed: {processName}" + "\n");
-                    Console.ResetColor();
+                    evidenceDatabaseMonitor,
+                    new RealTimeDetectionEngine(logger, options),
+                    new BaselineLearningMonitor(logger, options),
+                    new ProcessActivityMonitor(logger, options),
+                    new EventLogActivityMonitor(logger, options),
+                    new FileActivityMonitor(logger, options),
+                    new RegistryActivityMonitor(logger, options),
+                    new HiddenKernelArtifactDetector(logger, options),
+                    new TransientDriverMappingDetector(logger, options),
+                    new HardwareIdentityCrossValidator(logger, options),
+                    new HardwareIdentityIntegrityMonitor(logger, options),
+                    new TargetProcessInteractionMonitor(logger, options),
+                    new KernelCommunicationSurfaceDetector(logger, options),
+                    new TrustedProcessAbuseMonitor(logger, options),
+                    new NativeAbuseMonitor(logger, options),
+                    new DefensiveIntegrityMonitor(logger, options),
+                    new BehavioralProfileMonitor(logger, options),
+                    new ReputationMonitor(logger, options),
+                    new SessionEngine(logger, options),
+                    new ActiveCaptureMonitor(logger, options),
+                    new MappedMemoryScanner(logger, options)
+                };
 
-                    using (StreamWriter writer = File.AppendText(filePath))
+                Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs eventArgs)
+                {
+                    eventArgs.Cancel = true;
+                    Shutdown.Set();
+                };
+
+                try
+                {
+                    foreach (IDetectionMonitor monitor in monitors)
                     {
-                        writer.WriteLine($"App Closed: {processName}");
+                        monitor.Start();
+                    }
+
+                    logger.Log(DetectionEvent.Create(
+                        "Monitor",
+                        "Started",
+                        EventSeverity.Low,
+                        "Aegis Anywhere detection monitor is running.",
+                        null,
+                        null,
+                        new Dictionary<string, string>
+                        {
+                            { "log_directory", logRoot },
+                            { "map_scan_interval_seconds", options.MapScanInterval.TotalSeconds.ToString("0") },
+                            { "kernel_artifact_scan_interval_seconds", options.KernelArtifactScanInterval.TotalSeconds.ToString("0") },
+                            { "identity_scan_interval_seconds", options.IdentityScanInterval.TotalSeconds.ToString("0") },
+                            { "hwid_integrity_enabled", options.HardwareIdentityIntegrityEnabled.ToString() },
+                            { "hwid_integrity_scan_interval_seconds", options.HardwareIdentityIntegrityScanInterval.TotalSeconds.ToString("0") },
+                            { "target_interaction_scan_interval_seconds", options.TargetInteractionScanInterval.TotalSeconds.ToString("0") },
+                            { "kernel_communication_scan_interval_seconds", options.KernelCommunicationScanInterval.TotalSeconds.ToString("0") },
+                            { "defensive_integrity_enabled", options.DefensiveIntegrityEnabled.ToString() },
+                            { "defensive_integrity_scan_interval_seconds", options.DefensiveIntegrityScanInterval.TotalSeconds.ToString("0") },
+                            { "behavioral_profiling_enabled", options.BehavioralProfilingEnabled.ToString() },
+                            { "behavioral_profile_window_minutes", options.BehavioralProfileWindow.TotalMinutes.ToString("0") },
+                            { "reputation_enabled", options.ReputationEnabled.ToString() },
+                            { "evidence_database_enabled", options.EvidenceDatabaseEnabled.ToString() },
+                            { "investigation_ui_enabled", options.InvestigationUiEnabled.ToString() },
+                            { "detection_profile", options.DetectionProfileName },
+                            { "active_capture_enabled", options.ActiveCaptureEnabled.ToString() },
+                            { "active_capture_cooldown_seconds", options.ActiveCaptureCooldown.TotalSeconds.ToString("0") },
+                            { "watch_all_fixed_drives", options.WatchAllFixedDrives.ToString() },
+                            { "emit_initial_mapped_files", options.EmitInitialMappedFiles.ToString() }
+                        }));
+
+                    if (options.InvestigationUiEnabled && options.EvidenceDatabaseEnabled)
+                    {
+                        Application.EnableVisualStyles();
+                        Application.SetCompatibleTextRenderingDefault(false);
+                        Application.Run(new InvestigationForm(evidenceDatabaseMonitor.Database));
+                        Shutdown.Set();
+                    }
+                    else
+                    {
+                        WaitForExit();
                     }
                 }
-
-                //initialProcesses = currentProcesses;
-
-                foreach (string processName in currentProcesses)
+                finally
                 {
-                    if (!initialProcesses.Contains(processName))
+                    logger.Log(DetectionEvent.Create(
+                        "Monitor",
+                        "Stopping",
+                        EventSeverity.Low,
+                        "Stopping detection monitors.",
+                        null,
+                        null,
+                        null));
+
+                    for (int i = monitors.Count - 1; i >= 0; i--)
                     {
-                        string appLocation = GetAppLocation(processName);
-                        if (appLocation != null)
+                        try
                         {
-                            List<string> commandLines = GetCommandLines(processName);
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine($"New App Found: {processName} | App Location: {appLocation}");
-                            Console.ResetColor();
-
-                            using (StreamWriter writer = File.AppendText(filePath))
-                            {
-                                writer.WriteLine($"New App Found: {processName} | App Location: {appLocation}");
-                            }
-
-                            if (commandLines.Count > 0)
-                            {
-                                //Console.WriteLine("Command Lines/Arguments:");
-                                foreach (string commandLine in commandLines)
-                                {
-                                    if (!AppArgs.Contains(commandLine))
-                                    {
-                                        Console.ForegroundColor = ConsoleColor.Red;
-                                        Console.WriteLine(commandLine + "\n");
-                                        Console.ResetColor();
-                                        using (StreamWriter writer = File.AppendText(filePath))
-                                        {
-                                            writer.WriteLine(commandLine);
-                                        }
-                                        AppArgs.Add(commandLine); // Add the command-line argument to the list
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                //Console.WriteLine("No command lines/arguments found.");
-
-                                using (StreamWriter writer = File.AppendText(filePath))
-                                {
-                                    writer.WriteLine("No command lines/arguments found.");
-                                }
-                            }
-
-                            string destinationPath = Path.Combine(newAppsDirectory, Path.GetFileName(appLocation));
-
-                            try
-                            {
-                                if (!File.Exists(destinationPath))
-                                {
-                                    File.Copy(appLocation, destinationPath);
-                                    initialProcesses.Add(processName);
-                                }
-                                else
-                                {
-                                    //Console.WriteLine($"File already exists at {destinationPath}. Skipped copying.");
-
-                                    using (StreamWriter writer = File.AppendText(filePath))
-                                    {
-                                        writer.WriteLine($"File already exists at {destinationPath}. Skipped copying.");
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                //Console.WriteLine($"Error copying file: {ex.Message}");
-                                using (StreamWriter writer = File.AppendText(filePath))
-                                {
-                                    writer.WriteLine($"Error copying file: {ex.Message}");
-                                }
-                            }
+                            monitors[i].Dispose();
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            //Console.WriteLine($"App Location for {processName} is not accessible. Skipping.");
-                            using (StreamWriter writer = File.AppendText(filePath))
-                            {
-                                writer.WriteLine($"App Location for {processName} is not accessible. Skipping.");
-                            }
+                            logger.LogException("Monitor", "DisposeFailed", ex, monitors[i].Name);
                         }
-
-                        initialProcesses.Add(processName);
-
                     }
                 }
-
-                initialProcesses = currentProcesses;
-                System.Threading.Thread.Sleep(0); // Sleep for 5 seconds
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Unhandled Exception: {ex}");
-            using (StreamWriter writer = File.AppendText(filePath))
-            {
-                writer.WriteLine($"Unhandled Exception: {ex}");
             }
         }
 
-        Console.WriteLine("Press Any Key To Exit!");
-        Console.ReadLine();
-    }
-
-
-    static List<string> GetCommandLines(string processName)
-    {
-        List<string> commandLines = new List<string>();
-        Process[] processes = Process.GetProcessesByName(processName);
-
-        foreach (Process process in processes)
+        private static void WaitForExit()
         {
-            try
-            {
-                commandLines.Add(process.StartInfo.Arguments);
-            }
-            catch (Win32Exception ex)
-            {
-                Console.WriteLine($"Error getting command line for process {processName}: {ex.Message}");
-                using (StreamWriter writer = File.AppendText(filePath))
-                {
-                    writer.WriteLine($"Error getting command line for process {processName}: {ex.Message}");
-                }
-            }
-        }
-
-        using (ManagementObjectSearcher searcher = new ManagementObjectSearcher($"SELECT CommandLine FROM Win32_Process WHERE Name = '{processName}.exe'"))
-        {
-            foreach (ManagementObject obj in searcher.Get())
+            while (!Shutdown.Wait(500))
             {
                 try
                 {
-                    commandLines.Add(obj["CommandLine"].ToString());
-                }
-                catch (Win32Exception ex)
-                {
-                    Console.WriteLine($"Error getting command line for process {processName}: {ex.Message}");
-                    using (StreamWriter writer = File.AppendText(filePath))
+                    if (Console.KeyAvailable)
                     {
-                        writer.WriteLine($"Error getting command line for process {processName}: {ex.Message}");
+                        ConsoleKeyInfo key = Console.ReadKey(true);
+                        if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
+                        {
+                            Shutdown.Set();
+                        }
                     }
                 }
+                catch (InvalidOperationException)
+                {
+                    Thread.Sleep(500);
+                }
             }
         }
 
-        return commandLines;
-    }
-
-    static void StartApplication(string commandLine)
-    {
-        try
+        private static void PrintBanner(EventLogger logger)
         {
-            Process.Start(new ProcessStartInfo
+            Console.WriteLine("Aegis Anywhere Detection Monitor");
+            Console.WriteLine("Press Q, Esc, or Ctrl+C to stop.");
+            Console.WriteLine();
+
+            logger.Log(DetectionEvent.Create(
+                "Monitor",
+                "Initialized",
+                EventSeverity.Low,
+                "Logger initialized.",
+                null,
+                null,
+                null));
+        }
+
+        private static void RunPlatformSelfTest(string[] args)
+        {
+            MonitorOptions options = MonitorOptions.FromArgs(args);
+            string logRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Aegis Logs");
+            Directory.CreateDirectory(logRoot);
+
+            using (EventLogger logger = new EventLogger(logRoot, false))
             {
-                FileName = "cmd.exe",
-                Arguments = $"/C {commandLine}",
-                RedirectStandardOutput = false,
-                UseShellExecute = true,
-                CreateNoWindow = true
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
-    }
+                string databasePath = string.IsNullOrWhiteSpace(options.EvidenceDatabasePath)
+                    ? Path.Combine(logRoot, "AegisEvidence.selftest.db")
+                    : options.EvidenceDatabasePath;
+                EvidenceDatabase database = new EvidenceDatabase(databasePath);
+                database.Initialize();
 
-    static void GetInitialProcesses()
-    {
-        foreach (Process process in Process.GetProcesses())
-        {
-            initialProcesses.Add(process.ProcessName);
-        }
-    }
+                DetectionEvent detectionEvent = DetectionEvent.Create(
+                    "SelfTest",
+                    "PlatformSelfTest",
+                    EventSeverity.Medium,
+                    "SQLite evidence database and detection-platform dependencies initialized.",
+                    databasePath,
+                    null,
+                    new Dictionary<string, string>
+                    {
+                        { "case_id", "SELFTEST-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss") },
+                        { "confidence_score", "0.50" },
+                        { "case_summary", "Platform self-test event." }
+                    });
 
-    static List<string> GetCurrentProcesses()
-    {
-        List<string> currentProcesses = new List<string>();
-
-        foreach (Process process in Process.GetProcesses())
-        {
-            currentProcesses.Add(process.ProcessName);
-        }
-
-        return currentProcesses;
-    }
-
-    static string GetAppLocation(string processName)
-    {
-        try
-        {
-            Process[] processes = Process.GetProcessesByName(processName);
-            if (processes.Length > 0)
-            {
-                return processes[0].MainModule.FileName;
+                long eventId = database.InsertEvent(detectionEvent);
+                logger.Log(detectionEvent);
+                Console.WriteLine("Platform self-test succeeded.");
+                Console.WriteLine("Database: " + database.DatabasePath);
+                Console.WriteLine("Inserted event id: " + eventId.ToString());
             }
         }
-        catch (Exception)
-        {
-            // Handle exceptions if the process is inaccessible
-        }
-
-        return "N/A";
-    }
-
-    static void StartDxdiag()
-    {
-        string appLocation = @"C:\WINDOWS\SYSTEM32\dxdiag.exe";
-        string arguments = @"/dontskip /whql:off /t ""C:\Users\Mercy\AppData\Local\Temp\Activision\bootstrapper\20231023-231633755\dxdiag_onboot.txt""";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process dxdiagProcess = new Process() { StartInfo = startInfo };
-        dxdiagProcess.Start();
-        dxdiagProcess.WaitForExit();
-    }
-
-    static void StartMoUsoCoreWorker()
-    {
-        string appLocation = @"C:\Windows\System32\mousocoreworker.exe";
-        string arguments = @"-Embedding";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process mousoCoreWorkerProcess = new Process() { StartInfo = startInfo };
-        mousoCoreWorkerProcess.Start();
-        mousoCoreWorkerProcess.WaitForExit();
-    }
-
-    static void StartBootstrapper()
-    {
-        string appLocation = @"C:\Program Files (x86)\Call of Duty\_retail_\bootstrapper.exe";
-        string arguments = @"cod.exe -uid auks";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process bootstrapperProcess = new Process() { StartInfo = startInfo };
-        bootstrapperProcess.Start();
-        bootstrapperProcess.WaitForExit();
-    }
-
-    static void StartBootstrapperCrashHandler()
-    {
-        string appLocation = @"C:\Program Files (x86)\Call of Duty\_retail_\bootstrappercrashhandler.exe";
-        string arguments = @"--project ""bootstrapper"" --engine_pid 24800 --engine_build ""public_ship"" --engine_exec_name ""bootstrapper.exe"" --engine_changelist 1 --exception_info_addr 140695177063952 --shared_mutex_name ""namedMutex-20231023-231633755"" --folder_crashreport ""C:\Users\Mercy\AppData\Local\Activision\bootstrapper\crash_reports"" --folder_temp ""C:\Users\Mercy\AppData\Local\Temp\Activision\bootstrapper\20231023-231633755"" --fullpath_datafile ""C:\Users\Mercy\AppData\Local\Temp\Activision\bootstrapper\20231023-231633755\datafile.json"" --fullpath_bnet_launcher ""C:\Program Files (x86)\Call of Duty\_retail_\\"" --used_version_lib ""0.24.1"" --used_version_app ""0.21.4"" --time_code ""20231023-231633755"" --throttle_dev 1.000000 --throttle_prod 0.020000 --titleid_dev 6031 --titleid_prod 6031 --first_party ""bnet"" --first_party_project ""auks"" --opt-allow_crash_upload --opt-allow_dump_generation --opt-packaged_build";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process bootstrapperCrashHandlerProcess = new Process() { StartInfo = startInfo };
-        bootstrapperCrashHandlerProcess.Start();
-        bootstrapperCrashHandlerProcess.WaitForExit();
-    }
-
-    static void StartCod()
-    {
-        string appLocation = @"C:\Program Files (x86)\Call of Duty\_retail_\cod.exe";
-        string arguments = @"-uid auks hdeyguxs3zaumvlgvybm2vyc";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process codProcess = new Process() { StartInfo = startInfo };
-        codProcess.Start();
-        codProcess.WaitForExit();
-    }
-
-    static void StartCodCrashHandler()
-    {
-        string appLocation = @"C:\Program Files (x86)\Call of Duty\_retail_\codCrashHandler.exe";
-        string arguments = @"hdeyguxs3zaumvlgvybm2vyc --project ""iw9"" --engine_pid 24580 --engine_build ""public_ship"" --engine_exec_name ""cod.exe"" --engine_changelist 16245188 --exception_info_addr 140701575390144 --shared_mutex_name ""namedMutex-20231023-231649180"" --folder_crashreport ""C:\Users\Mercy\AppData\Local\Activision\Call of Duty\crash_reports"" --folder_temp ""C:\Users\Mercy\AppData\Local\Temp\Activision\Call of Duty\20231023-231649180"" --fullpath_datafile ""C:\Users\Mercy\AppData\Local\Temp\Activision\Call of Duty\20231023-231649180\datafile.json"" --fullpath_bnet_launcher ""C:\Program Files (x86)\Call of Duty\_retail_\cod Launcher.exe"" --used_version_lib ""0.26.0"" --used_version_app ""0.22.0"" --time_code ""20231023-231649180"" --throttle_dev 1.000000 --throttle_prod 0.020000 --titleid_dev 5886 --titleid_prod 7000 --first_party ""bnet"" --first_party_project ""AUKS"" --opt-allow_crash_upload --opt-allow_dump_generation --opt-allow_popup_display --opt-packaged_build --opt-enable_save_dlog_events_feature";
-
-        ProcessStartInfo startInfo = new ProcessStartInfo(appLocation)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        Process codCrashHandlerProcess = new Process() { StartInfo = startInfo };
-        codCrashHandlerProcess.Start();
-        codCrashHandlerProcess.WaitForExit();
     }
 }

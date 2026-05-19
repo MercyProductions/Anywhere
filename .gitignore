@@ -1,0 +1,40 @@
+# Visual Studio / local IDE state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+x64/
+x86/
+Debug/
+Release/
+*.pdb
+*.ilk
+*.tlog
+*.lastbuildstate
+
+# Runtime evidence, logs, and investigation databases
+Aegis Logs/
+**/Aegis Logs/
+*.log
+*.jsonl
+*.chain.jsonl
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+Thumbs.db
+desktop.ini
