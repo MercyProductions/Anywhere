@@ -176,7 +176,7 @@ namespace AnyWhere.Telemetry
             if (_disposed ||
                 !_options.ReputationEnabled ||
                 detectionEvent == null ||
-                detectionEvent.Category.StartsWith("Reputation", StringComparison.OrdinalIgnoreCase))
+                IsDerivedAnalysisEvent(detectionEvent.Category))
             {
                 return;
             }
@@ -204,6 +204,25 @@ namespace AnyWhere.Telemetry
 
             _store.Flush();
             EmitReputationSignals(detectionEvent, assessments);
+        }
+
+        private static bool IsDerivedAnalysisEvent(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return false;
+            }
+
+            return category.StartsWith("Reputation", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("DetectionEngine", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BehaviorProfile", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BehavioralProfile", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BaselineLearning", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("SessionReplay", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("ActiveCapture", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("EvidenceDatabase", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("Monitor", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("Replay", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool ShouldTrackEvent(DetectionEvent detectionEvent)

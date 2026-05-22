@@ -64,6 +64,7 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -124,10 +125,12 @@
     <Compile Include="Telemetry\AuthenticodeVerifier.cs" />
     <Compile Include="Telemetry\BaselineLearningMonitor.cs" />
     <Compile Include="Telemetry\BehavioralProfileMonitor.cs" />
+    <Compile Include="Telemetry\CaseExportBundleWriter.cs" />
     <Compile Include="Telemetry\CaseIntegrityManifestWriter.cs" />
     <Compile Include="Telemetry\DefensiveIntegrityMonitor.cs" />
     <Compile Include="Telemetry\DetectionEvent.cs" />
     <Compile Include="Telemetry\DetectionProfileSettings.cs" />
+    <Compile Include="Telemetry\DetectionReplayRunner.cs" />
     <Compile Include="Telemetry\DevicePathResolver.cs" />
     <Compile Include="Telemetry\DeviceHandleRecord.cs" />
     <Compile Include="Telemetry\DeviceHandleScanner.cs" />
@@ -156,6 +159,7 @@
     <Compile Include="Telemetry\KernelCommunicationSurfaceDetector.cs" />
     <Compile Include="Telemetry\KernelModuleInventory.cs" />
     <Compile Include="Telemetry\KernelPathNormalizer.cs" />
+    <Compile Include="Telemetry\KernelSensorServiceManager.cs" />
     <Compile Include="Telemetry\LoadedKernelModuleRecord.cs" />
     <Compile Include="Telemetry\MappedMemoryScanner.cs" />
     <Compile Include="Telemetry\MemoryMapRecord.cs" />
@@ -169,6 +173,8 @@
     <Compile Include="Telemetry\RegistryWatchTarget.cs" />
     <Compile Include="Telemetry\ReputationMonitor.cs" />
     <Compile Include="Telemetry\ReputationStore.cs" />
+    <Compile Include="Telemetry\ReplayExpectationEvaluator.cs" />
+    <Compile Include="Telemetry\ReplayEventReader.cs" />
     <Compile Include="Telemetry\RealTimeDetectionEngine.cs" />
     <Compile Include="Telemetry\SecurityUtilities.cs" />
     <Compile Include="Telemetry\SessionEngine.cs" />

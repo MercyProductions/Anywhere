@@ -81,6 +81,24 @@ namespace AnyWhere.Telemetry
             return detectionEvent;
         }
 
+        public static DetectionEvent CreateReplayed(
+            DateTimeOffset timestampUtc,
+            string category,
+            string action,
+            EventSeverity severity,
+            string description,
+            string path,
+            int? processId,
+            string processName,
+            IDictionary<string, string> details)
+        {
+            DetectionEvent detectionEvent = Create(category, action, severity, description, path, null, details);
+            detectionEvent.TimestampUtc = timestampUtc.ToUniversalTime();
+            detectionEvent.ProcessId = processId;
+            detectionEvent.ProcessName = processName;
+            return detectionEvent;
+        }
+
         private static int? SafeGetProcessId(Process process)
         {
             try

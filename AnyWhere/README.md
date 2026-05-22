@@ -111,6 +111,10 @@ Each run creates:
 .\AnyWhere.exe --emit-initial-mapped-files
 .\AnyWhere.exe --watch-all-fixed-drives
 .\AnyWhere.exe --ui
+.\AnyWhere.exe --gui
+.\AnyWhere.exe --console
+.\AnyWhere.exe --auto-load-kernel-sensor
+.\AnyWhere.exe "--kernel-sensor-driver=C:\AegisDrivers\AegisKernelSensor.sys" --kernel-sensor-service=AegisKernelSensor
 .\AnyWhere.exe --detection-profile=balanced
 .\AnyWhere.exe --detection-profile=aggressive
 .\AnyWhere.exe --detection-profile=silent-telemetry
@@ -121,7 +125,11 @@ Each run creates:
 .\AnyWhere.exe "--case-status=DCASE-20260519-120000-abcd1234|confirmed|reviewed by analyst"
 .\AnyWhere.exe "--case-note=DCASE-20260519-120000-abcd1234|Loader and driver activity line up with game launch."
 .\AnyWhere.exe "--case-tag=DCASE-20260519-120000-abcd1234|confirmed_mapper"
+.\AnyWhere.exe "--export-case=DCASE-20260519-120000-abcd1234" --database=C:\AegisEvidence\AegisEvidence.db --export-output=C:\AegisExports
 .\AnyWhere.exe --platform-self-test
+.\AnyWhere.exe "--replay=C:\Aegis Logs\aegis-events-20260519-190617.jsonl"
+.\AnyWhere.exe "--replay=C:\Aegis Logs" --replay-output=C:\AegisReplay --detection-profile=development-testing
+.\AnyWhere.exe "--replay=C:\Aegis Logs" --replay-expect=C:\AegisReplay\expected.json
 .\AnyWhere.exe --quiet
 .\AnyWhere.exe --max-hash-mb=250
 .\AnyWhere.exe --max-device-handles=2000
@@ -156,14 +164,25 @@ Each run creates:
 - `--evidence-mirror=PATH` duplicates Active Capture case folders to a secondary storage location.
 - `--emit-initial-mapped-files` logs every mapped file found during the first scan. Without it, the first scan is a baseline and only new mappings are emitted.
 - `--watch-all-fixed-drives` recursively watches every fixed drive. This is noisy but broader.
-- `--ui` opens the investigation interface while the collectors continue running.
+- `--ui` or `--gui` sets the global GUI mode flag at startup and opens the investigation interface while the collectors continue running.
+- `--console` clears the global GUI mode flag and keeps the process in console monitoring mode.
+- `--auto-load-kernel-sensor` attempts to create/update/start a demand-start kernel-driver service through the Windows Service Control Manager before live monitoring begins. This uses the standard signed or test-signed driver path only; there is no mapper, vulnerable-driver, unsigned-driver, or signature-bypass fallback.
+- `--kernel-sensor-driver=PATH` sets the `.sys` file to load and also enables kernel-sensor auto-load. Without it, Aegis looks for `AegisKernelSensor.sys` or `AegisDriver2.sys` next to the executable and in known development build output paths.
+- `--kernel-sensor-service=NAME` sets the service name used for the kernel sensor. If omitted, Aegis uses the driver filename without `.sys`.
 - `--detection-profile=NAME` selects `balanced`, `aggressive`, `silent-telemetry`, `anti-spoofer-focus`, `anti-hidden-driver-focus`, or `development-testing`.
 - `--database=PATH` stores the SQLite evidence database at a specific path instead of the run log folder.
 - `--disable-evidence-db` disables SQLite storage and the live UI database backend.
 - `--case-status=CASE|STATUS|NOTE` updates a case classification. Supported statuses are free-form, but the UI offers `open`, `investigating`, `confirmed`, `false_positive`, `trusted`, and `closed`.
 - `--case-note=CASE|NOTE` appends an analyst note to a case.
 - `--case-tag=CASE|TAG` adds a tag to a case.
+- `--export-case=CASE` creates a portable reviewer bundle from the SQLite evidence database without starting live collectors. The bundle includes `summary.html`, `case.json`, `timeline.csv`, `case-events.jsonl`, artifact/detail/note/tag CSVs, mirrored Aegis case evidence when available, and `case-integrity-manifest.json`.
+- `--export-output=PATH` writes case exports to a folder, or to a specific `.zip` path when the value ends with `.zip`. Without it, exports go under `Aegis Logs\Case Exports\`.
 - `--platform-self-test` initializes the SQLite provider, creates a self-test database, inserts a test event, and exits.
+- `--replay=PATH` or `--replay-input=PATH` replays one JSONL file, a wildcard, or a directory of saved Aegis JSONL logs through the offline detection replay harness. It starts event-driven analysis only: evidence database, real-time rules, baseline learning, behavioral profiles, reputation, and session replay.
+- `--replay-output=PATH` writes replay logs, database, generated cases, and `replay-summary.txt` to a specific directory. Without it, replay output goes under `Aegis Logs\Replay\`.
+- `--replay-expect=PATH` or `--replay-expectations=PATH` evaluates a golden replay expectation JSON after replay. It writes `replay-expectations.txt`, marks the replay summary as pass/fail, and exits with code `2` when expectations fail.
+- `--replay-include-derived` also feeds previously generated DetectionEngine, BehaviorProfile, Reputation, SessionReplay, ActiveCapture, Monitor, and EvidenceDatabase events back into replay. By default these are skipped so detections are regenerated from source telemetry.
+- `--replay-rebase-timestamps` maps source event timestamps onto the current replay run while preserving their relative offsets. Without it, source timestamps are preserved.
 - `--quiet` keeps the console focused on medium and higher severity events while still writing all events to disk.
 - `--max-hash-mb=N` controls the largest file that will be SHA-256 hashed.
 - `--max-device-handles=N` caps each visible device-handle scan. Use `0` to disable user-mode handle inspection.
@@ -171,6 +190,33 @@ Each run creates:
 - `--max-kernel-comm-handles=N` caps each visible object-handle scan for kernel communication surface detection. Use `0` to disable this handle inspection pass.
 - `--max-active-capture-handles=N` caps the active-capture handle snapshot pass. Use `0` to skip handle snapshots inside bundles.
 - `--max-self-handle-scan=N` caps the defensive integrity scan for suspicious process handles to AnyWhere. Use `0` to disable this specific scan.
+
+Example replay expectation file:
+
+```json
+{
+  "description": "Golden replay for transient driver staging sample",
+  "min_files_read": 1,
+  "min_replayed_events": 1,
+  "max_parse_failures": 0,
+  "expected_events": [
+    {
+      "name": "detection engine fired",
+      "category": "DetectionEngine",
+      "min_count": 1
+    }
+  ],
+  "expected_cases": [
+    {
+      "name": "transient driver rule",
+      "category": "DetectionEngine",
+      "rule_id": "transient_driver_mapper_chain",
+      "min_confidence": 0.60,
+      "min_count": 1
+    }
+  ]
+}
+```
 
 ## Limits
 

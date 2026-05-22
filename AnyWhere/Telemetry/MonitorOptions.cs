@@ -45,7 +45,13 @@ namespace AnyWhere.Telemetry
 
         public bool InvestigationUiEnabled { get; private set; }
 
+        public bool KernelSensorAutoLoadEnabled { get; private set; }
+
         public bool VerboseConsole { get; private set; }
+
+        public bool ReplayIncludeDerivedEvents { get; private set; }
+
+        public bool ReplayRebaseTimestamps { get; private set; }
 
         public long MaxHashBytes { get; private set; }
 
@@ -75,9 +81,23 @@ namespace AnyWhere.Telemetry
 
         public string DetectionProfileName { get; private set; }
 
+        public string ReplayOutputPath { get; private set; }
+
+        public string ReplayExpectationPath { get; private set; }
+
+        public string ExportCaseId { get; private set; }
+
+        public string ExportOutputPath { get; private set; }
+
+        public string KernelSensorDriverPath { get; private set; }
+
+        public string KernelSensorServiceName { get; private set; }
+
         public List<string> ProtectedProcessNames { get; private set; }
 
         public List<string> ReputationImportPaths { get; private set; }
+
+        public List<string> ReplayInputPaths { get; private set; }
 
         public List<string> ReputationMarks { get; private set; }
 
@@ -108,7 +128,10 @@ namespace AnyWhere.Telemetry
             EvidenceArchiveEnabled = false;
             EvidenceDatabaseEnabled = true;
             InvestigationUiEnabled = false;
+            KernelSensorAutoLoadEnabled = false;
             VerboseConsole = true;
+            ReplayIncludeDerivedEvents = false;
+            ReplayRebaseTimestamps = false;
             MaxHashBytes = 100L * 1024L * 1024L;
             MaxRegistryDiffEventsPerBurst = 100;
             MaxDeviceHandlesToInspect = 2000;
@@ -123,7 +146,14 @@ namespace AnyWhere.Telemetry
             ReputationExportPath = null;
             EvidenceDatabasePath = null;
             DetectionProfileName = "balanced";
+            ReplayOutputPath = null;
+            ReplayExpectationPath = null;
+            ExportCaseId = null;
+            ExportOutputPath = null;
+            KernelSensorDriverPath = null;
+            KernelSensorServiceName = null;
             ReputationImportPaths = new List<string>();
+            ReplayInputPaths = new List<string>();
             ReputationMarks = new List<string>();
             CaseStatusUpdates = new List<string>();
             CaseNotes = new List<string>();
@@ -196,9 +226,27 @@ namespace AnyWhere.Telemetry
                     options.EvidenceDatabaseEnabled = false;
                 }
                 else if (arg.Equals("--ui", StringComparison.OrdinalIgnoreCase) ||
+                         arg.Equals("--gui", StringComparison.OrdinalIgnoreCase) ||
                          arg.Equals("--investigation-ui", StringComparison.OrdinalIgnoreCase))
                 {
                     options.InvestigationUiEnabled = true;
+                }
+                else if (arg.Equals("--console", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.InvestigationUiEnabled = false;
+                }
+                else if (arg.Equals("--auto-load-kernel-sensor", StringComparison.OrdinalIgnoreCase) ||
+                         arg.Equals("--autoload-kernel-sensor", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.KernelSensorAutoLoadEnabled = true;
+                }
+                else if (arg.Equals("--replay-include-derived", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.ReplayIncludeDerivedEvents = true;
+                }
+                else if (arg.Equals("--replay-rebase-timestamps", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.ReplayRebaseTimestamps = true;
                 }
                 else if (arg.StartsWith("--map-scan-seconds=", StringComparison.OrdinalIgnoreCase))
                 {
@@ -403,6 +451,79 @@ namespace AnyWhere.Telemetry
                     if (!string.IsNullOrWhiteSpace(value))
                     {
                         options.EvidenceDatabasePath = value;
+                    }
+                }
+                else if (arg.StartsWith("--kernel-sensor-driver=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--kernel-sensor-driver=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.KernelSensorDriverPath = value;
+                        options.KernelSensorAutoLoadEnabled = true;
+                    }
+                }
+                else if (arg.StartsWith("--kernel-sensor-service=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--kernel-sensor-service=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.KernelSensorServiceName = value;
+                    }
+                }
+                else if (arg.StartsWith("--replay=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--replay=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ReplayInputPaths.Add(value);
+                    }
+                }
+                else if (arg.StartsWith("--replay-input=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--replay-input=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ReplayInputPaths.Add(value);
+                    }
+                }
+                else if (arg.StartsWith("--replay-output=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--replay-output=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ReplayOutputPath = value;
+                    }
+                }
+                else if (arg.StartsWith("--replay-expect=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--replay-expect=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ReplayExpectationPath = value;
+                    }
+                }
+                else if (arg.StartsWith("--replay-expectations=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--replay-expectations=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ReplayExpectationPath = value;
+                    }
+                }
+                else if (arg.StartsWith("--export-case=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--export-case=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ExportCaseId = value;
+                    }
+                }
+                else if (arg.StartsWith("--export-output=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = arg.Substring("--export-output=".Length).Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        options.ExportOutputPath = value;
                     }
                 }
                 else if (arg.StartsWith("--detection-profile=", StringComparison.OrdinalIgnoreCase))

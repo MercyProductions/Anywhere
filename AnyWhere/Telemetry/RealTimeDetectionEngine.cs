@@ -63,7 +63,7 @@ namespace AnyWhere.Telemetry
         {
             if (_disposed ||
                 detectionEvent == null ||
-                detectionEvent.Category.StartsWith("DetectionEngine", StringComparison.OrdinalIgnoreCase))
+                IsAnalysisFeedbackEvent(detectionEvent.Category))
             {
                 return;
             }
@@ -77,10 +77,29 @@ namespace AnyWhere.Telemetry
             }
 
             _recentSignals.Enqueue(signal);
-            CleanupRecentSignals();
+            CleanupRecentSignals(signal.TimestampUtc);
 
             EvaluateBurstAnomaly(signal);
             EvaluateRules(signal);
+        }
+
+        private static bool IsAnalysisFeedbackEvent(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return false;
+            }
+
+            return category.StartsWith("DetectionEngine", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("Reputation", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BehaviorProfile", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BehavioralProfile", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("BaselineLearning", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("SessionReplay", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("ActiveCapture", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("EvidenceDatabase", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("Monitor", StringComparison.OrdinalIgnoreCase) ||
+                   category.StartsWith("Replay", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool ShouldSuppress(DetectionSignal signal)
@@ -102,7 +121,7 @@ namespace AnyWhere.Telemetry
 
         private void EvaluateBurstAnomaly(DetectionSignal current)
         {
-            DateTime cutoff = DateTime.UtcNow.Subtract(BurstWindow);
+            DateTime cutoff = current.TimestampUtc.Subtract(BurstWindow);
             List<DetectionSignal> burst = _recentSignals
                 .Where(s => s.TimestampUtc >= cutoff && s.Severity >= EventSeverity.High)
                 .ToList();
@@ -112,7 +131,7 @@ namespace AnyWhere.Telemetry
                 return;
             }
 
-            string key = "burst|" + DateTime.UtcNow.ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture);
+            string key = "burst|" + current.TimestampUtc.ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture);
             if (!RememberReportedKey(key))
             {
                 return;
@@ -159,7 +178,7 @@ namespace AnyWhere.Telemetry
 
         private List<DetectionSignal> BuildWindow(DetectionSignal current)
         {
-            DateTime cutoff = DateTime.UtcNow.Subtract(DetectionWindow);
+            DateTime cutoff = current.TimestampUtc.Subtract(DetectionWindow);
             string caseId = current.CaseId;
             int processId = current.ProcessId;
             string target = current.TargetProcessName;
@@ -537,9 +556,9 @@ namespace AnyWhere.Telemetry
             }
         }
 
-        private void CleanupRecentSignals()
+        private void CleanupRecentSignals(DateTime currentTimestampUtc)
         {
-            DateTime cutoff = DateTime.UtcNow.Subtract(DetectionWindow);
+            DateTime cutoff = currentTimestampUtc.Subtract(DetectionWindow);
             while (_recentSignals.TryPeek(out DetectionSignal signal) && signal.TimestampUtc < cutoff)
             {
                 DetectionSignal ignored;
